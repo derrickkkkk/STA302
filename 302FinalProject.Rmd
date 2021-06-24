@@ -1,0 +1,344 @@
+---
+title: "302Final_Project"
+author: "Zihan Wang"
+date: "6/13/2021"
+output: html_document
+---
+
+
+```{r}
+## If the package is not already installed then use ##
+library(tidyverse)
+library(NHANES)
+library(glmnet)
+library(car)
+library(rms)
+small.nhanes <- na.omit(NHANES[NHANES$SurveyYr=="2011_12"
+& NHANES$Age > 17,c(1,3,4,8:11,13,17,20,21,25,46,50,51,52,61)])
+small.nhanes <- as.data.frame(small.nhanes %>%
+group_by(ID) %>% filter(row_number()==1) )
+nrow(small.nhanes)
+## Checking whether there are any ID that was repeated. If not ##
+## then length(unique(small.nhanes$ID)) and nrow(small.nhanes) are same ##
+length(unique(small.nhanes$ID))
+```
+
+```{r}
+## Create training and test set ##
+set.seed(1005886515)
+train <- small.nhanes[sample(seq_len(nrow(small.nhanes)), size = 500),]
+nrow(train)
+length(which(small.nhanes$ID %in% train$ID))
+test <- small.nhanes[!small.nhanes$ID %in% train$ID,]
+nrow(test)
+length(unique(small.nhanes$ID))
+```
+
+
+
+```{r}
+?NHANES
+glimpse(small.nhanes)
+```
+
+```{r}
+summary(small.nhanes)
+```
+```{r}
+par(mfrow = c(2,2))
+hist(small.nhanes$BPSysAve)
+hist(small.nhanes$Age)
+hist(small.nhanes$BMI)
+hist(small.nhanes$Poverty)
+
+```
+
+```{r}
+par(mfrow=c(1,2))
+plot(small.nhanes$BPSysAve ~ small.nhanes$BMI,main = "BPSysAve & BMI")
+plot(small.nhanes$BPSysAve ~ small.nhanes$Age,main = "BPSysAve & Age")
+plot(small.nhanes$BPSysAve ~ small.nhanes$Weight,main = "BPSysAve & Weight")
+plot(small.nhanes$BPSysAve ~ small.nhanes$Height,main = "BPSysAve & Height")
+plot(small.nhanes$BPSysAve ~ small.nhanes$Race3,main = "BPSysAve & Race3")
+plot(small.nhanes$BPSysAve ~ small.nhanes$Gender,main = "BPSysAve & Gender")
+plot(small.nhanes$BPSysAve ~ small.nhanes$Education,main = "BPSysAve & Education")
+plot(small.nhanes$BPSysAve ~ small.nhanes$MaritalStatus,main = "BPSysAve & MaritalStatus")
+plot(small.nhanes$BPSysAve ~ small.nhanes$Poverty,main = "BPSysAve & Poverty")
+plot(small.nhanes$BPSysAve ~ small.nhanes$PhysActive,main = "BPSysAve & PhysActive")
+plot(small.nhanes$BPSysAve ~ small.nhanes$SleepHrsNight, main = "BPSysAve & SleepHrsNight")
+plot(small.nhanes$BPSysAve ~ small.nhanes$SmokeNow, main = "BPSysAve & SmokeNow")
+plot(small.nhanes$BPSysAve ~ small.nhanes$HHIncome, main = "HHIncome")
+plot(small.nhanes$BPSysAve ~ small.nhanes$Depressed, main = "Depressed")
+plot(small.nhanes$BPSysAve ~ small.nhanes$SleepTrouble, main = "SleepTrouble")
+
+```
+```{r}
+Smoke_model <- lm(BPSysAve~SmokeNow,data = train)
+summary(Smoke_model)
+```
+
+
+```{r}
+## model contains all variables except ID
+full_model <- lm(BPSysAve ~ .-ID, data = train)
+```
+
+```{r}
+## Check multicollinearity
+vif(full_model)
+```
+
+
+```{r}
+full_model2 <- lm(BPSysAve ~ .-ID-BMI, data = train)
+
+## Check multicollinearity
+vif(full_model2)
+
+```
+
+```{r}
+
+summary(full_model2)
+```
+
+```{r}
+## Based on AIC ##
+n <- nrow(train)
+sel.var.aic <- step(full_model2, trace = 0, k = 2, direction = "both") 
+sel.var.aic<-attr(terms(sel.var.aic), "term.labels")   
+sel.var.aic
+```
+
+
+```{r}
+
+## Based on BIC ##
+n <- nrow(train)
+sel.var.bic <- step(full_model2, trace = 0, k = log(n), direction = "both") 
+sel.var.bic<-attr(terms(sel.var.bic), "term.labels")   
+sel.var.bic
+```
+```{r}
+model_aic <- lm(BPSysAve~Gender+Age+Poverty, data = train)
+model_bic <- lm(BPSysAve ~ Gender + Age, data = train)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(model_aic)
+##Check Cook's Distance
+D <- cooks.distance(model_aic)
+which(D > qf(0.5, 3+1, 500-3-1))
+## DFFITS
+dfits <- dffits(model_aic)
+cutoff <- 2 * sqrt(length(model_aic$coefficients)/nrow(train))
+which(abs(dfits)>cutoff)
+## DFBETAS
+dfb <- dfbetas(model_aic)
+which(abs(dfb[2])>2/sqrt(nrow(train)))
+which(abs(dfb[3])>2/sqrt(nrow(train)))
+which(abs(dfb[4])>2/sqrt(nrow(train)))
+```
+```{r}
+row = c(44,62,76,105,114, 139, 155 ,165 ,187, 232, 235, 255, 256, 260, 306, 321, 325, 361, 366, 380, 389, 427, 439, 443, 478, 494)
+train[row,c("Gender", "Age", "Poverty", "BPSysAve")]
+```
+```{r}
+## remove line 332,  471
+train_aic <- train[-c(62, 439),]
+model_aic_new <- lm(BPSysAve~Gender+Age+Poverty, data = train_aic)
+```
+
+
+
+
+
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(model_bic)
+##Check Cook's Distance
+D <- cooks.distance(model_bic)
+which(D > qf(0.5, 2+1, 500-2-1))
+## DFFITS
+dfits <- dffits(model_bic)
+cutoff <- 2 * sqrt(length(model_bic$coefficients)/nrow(train))
+which(abs(dfits)>cutoff)
+## DFBETAS
+dfb <- dfbetas(model_bic)
+which(abs(dfb[2])>2/sqrt(nrow(train)))
+which(abs(dfb[3])>2/sqrt(nrow(train)))
+```
+```{r}
+row = c(1, 62,  76, 105, 114, 155, 165, 182, 187, 195, 232, 235, 255, 256, 260, 306, 321, 325, 361, 366, 380, 389, 427, 439, 443, 478, 494)
+train[row,c("Gender", "Age", "BPSysAve")]
+```
+```{r}
+## remove line 332, 471
+train_bic <- train[-c(62,439), ]
+model_bic_new <- lm(BPSysAve~Gender+Age, data = train_bic)
+```
+
+
+
+```{r}
+### LASSO selection ###
+
+## Perform cross validation to choose lambda ##
+set.seed(1005886515)
+cv.out <- cv.glmnet(x = model.matrix(full_model2), y = train$BPSysAve, standardize = T, alpha = 1)
+plot(cv.out)
+best.lambda <- cv.out$lambda.1se
+best.lambda
+co<-coef(cv.out, s = "lambda.1se")
+
+#Selection of the significant features(predictors)
+
+## threshold for variable selection ##
+
+thresh <- 0.00
+# select variables #
+inds<-which(abs(co) > thresh )
+variables<-row.names(co)[inds]
+sel.var.lasso<-variables[!(variables %in% '(Intercept)')]
+sel.var.lasso
+```
+
+```{r}
+model_lasso <- lm(BPSysAve~Age, data=train)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(model_lasso)
+##Check Cook's Distance
+D <- cooks.distance(model_lasso)
+which(D > qf(0.5, 1+1, 500-1-1))
+## DFFITS
+dfits <- dffits(model_lasso)
+cutoff <- 2 * sqrt(length(model_lasso$coefficients)/nrow(train))
+which(abs(dfits)>cutoff)
+## DFBETAS
+dfb <- dfbetas(model_lasso)
+which(abs(dfb[2])>2/sqrt(nrow(train)))
+```
+```{r}
+train[c(62,  76,  81, 105, 114, 124, 134, 155 ,182, 187, 195, 224, 232, 235, 255, 260, 306, 321, 325, 361, 365, 366, 380, 389 ,427, 439, 443 ,478, 494),c("Age","BPSysAve")]
+
+```
+
+```{r}
+## remove line 332, 471
+train_lasso=train[-c(62,439),]
+model_lasso_new <- lm(BPSysAve~Age, data=train_lasso)
+```
+
+
+
+
+```{r}
+set.seed(1005886515)
+### Cross Validation and prediction performance of AIC based selection ###
+ols.aic <- ols(BPSysAve ~ ., data = train_aic[,which(colnames(train_aic) %in% c(sel.var.aic, "BPSysAve"))], 
+               x=T, y=T, model = T)
+
+## 10 fold cross validation ##    
+aic.cross <- calibrate(ols.aic, method = "crossvalidation", B = 10)
+## Calibration plot ##
+pdf("aic_cross.pdf", height = 8, width = 16)
+plot(aic.cross, las = 1, xlab = "Predicted BPSysAve", main = "Cross-Validation calibration with AIC")
+dev.off()
+
+## Test Error ##
+pred.aic <- predict(ols.aic, newdata = test[,which(colnames(train_aic) %in% c(sel.var.aic, "BPSysAve"))])
+## Prediction error ##
+pred.error.AIC <- mean((test$BPSysAve - pred.aic)^2)
+```
+```{r}
+set.seed(1005886515)
+
+### Cross Validation and prediction performance of AIC based selection ###
+ols.bic <- ols(BPSysAve ~ ., data = train_bic[,which(colnames(train_bic) %in% c(sel.var.bic, "BPSysAve"))], 
+               x=T, y=T, model = T)
+
+## 10 fold cross validation ##    
+bic.cross <- calibrate(ols.bic, method = "crossvalidation", B = 10)
+## Calibration plot ##
+pdf("bic_cross.pdf", height = 8, width = 16)
+plot(bic.cross, las = 1, xlab = "Predicted BPSysAve", main = "Cross-Validation calibration with BIC")
+dev.off()
+
+## Test Error ##
+pred.bic <- predict(ols.bic, newdata = test[,which(colnames(train_bic) %in% c(sel.var.bic, "BPSysAve"))])
+## Prediction error ##
+pred.error.BIC <- mean((test$BPSysAve - pred.bic)^2)
+```
+
+
+
+```{r}
+set.seed(1005886515)
+
+### Cross Validation and prediction performance of lasso based selection ###
+ols.lasso <- ols(BPSysAve ~ ., data = train_lasso[,which(colnames(train_lasso) %in% c(sel.var.lasso, "BPSysAve"))], 
+                 x=T, y=T, model = T)
+
+## 10 fold cross validation ##    
+lasso.cross <- calibrate(ols.lasso, method = "crossvalidation", B = 10)
+## Calibration plot ##
+pdf("lasso_cross.pdf", height = 8, width = 16)
+plot(lasso.cross, las = 1, xlab = "Predicted BPSysAve", main = "Cross-Validation calibration with LASSO")
+dev.off()
+
+## Test Error ##
+pred.lasso <- predict(ols.lasso, newdata = test[,which(colnames(train_lasso) %in% c(sel.var.lasso, "BPSysAve"))])
+## Prediction error ##
+pred.error.lasso <- mean((test$BPSysAve - pred.lasso)^2)
+```
+
+```{r}
+## Compare AIC
+AIC(model_aic_new)
+AIC(model_bic_new)
+AIC(model_lasso_new)
+```
+
+```{r}
+## Compare BIC
+BIC(model_aic_new)
+BIC(model_bic_new)
+BIC(model_lasso_new)
+```
+
+```{r}
+## Compare adjusted R^2
+summary(model_aic_new)$adj.r.squared
+summary(model_bic_new)$adj.r.squared
+summary(model_lasso_new)$adj.r.squared
+
+```
+```{r}
+##Prediction Error
+pred.error.AIC
+pred.error.BIC
+pred.error.lasso
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(model_aic_new)
+```
+```{r}
+summary(model_aic_new)
+```
+
+```{r}
+Smoke_model <- lm(BPSysAve~SmokeNow, data = train)
+summary(Smoke_model)
+```
+
+
+
+
